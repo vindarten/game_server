@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -31,16 +32,19 @@
 #define BANKSOLD "\nBank sold %d raws to player %d for price %d"
 #define PLAYERBUY "\nPlayer %d want to buy %d raws for price %d"
 #define PLAYERSELL "\nPlayer %d want to sell %d products for price %d"
-#define MARKET "market                - get information about the market\n"
-#define PLAYER "player <number>       - get information about the player\n"
-#define PROD "prod <number>         - produce <number> items of product\n"
-#define BUY "buy <number> <price>  - participate in the auction of raw\n"
-#define SELL "sell <number> <price> - participate in the auction of products\n"
-#define BUILD "build <number>        - build <number> new factories\n"
-#define HELP "help                  - get help\n"
-#define WHO "whoAmI                - check your number\n"
-#define TURN "turn                  - finish action this turn\n"
-#define QUIT "quit                  - leave the game\n  >  "
+#define ADDED "\nPlayer %d added"
+#define YOUARE "\nYou are Player %d"
+#define HELP\
+	"market                - get information about the market\n"\
+	"player <number>       - get information about the player\n"\
+	"prod <number>         - produce <number> items of product\n"\
+	"buy <number> <price>  - participate in the auction of raw\n"\
+	"sell <number> <price> - participate in the auction of products\n"\
+	"build <number>        - build <number> new factories\n"\
+	"help                  - get help\n"\
+	"whoAmI                - check your number\n"\
+	"turn                  - finish action this turn\n"\
+	"quit                  - leave the game\n  >  "\
 
 int main(int argc, char **argv)
 {
@@ -52,11 +56,13 @@ int main(int argc, char **argv)
 	}	
 	gi.numUsrs = strtol(argv[1], NULL, 10);
 	port = strtol(argv[2], NULL, 10);
-	(gi).rawApp = (gi).prodApp = NULL;
 	if ((gi.listen = initSocket(port)) == -1) {
 		printf("error\n");
 		return 0;
 	}
+	gi.month = 0;
+	gi.rawApp = gi.prodApp = NULL;
+	gi.usrsList = malloc((gi.numUsrs)*sizeof(*gi.usrsList));
 	multiplexing(&gi);
 	return 0;
 }
@@ -85,8 +91,12 @@ void multiplexing(struct gameInfo *gi)
 {
 	int i, fdMax;
 	fd_set readfds;
-	initList(&((*gi).usrsList), (*gi).numUsrs);
-	(*gi).month = 0;
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		((*gi).usrsList[i]).buf = NULL;
+		((*gi).usrsList[i]).number = i+1;
+		((*gi).usrsList[i]).building = NULL;
+		clearUsr(&((*gi).usrsList[i]));
+	}
 	for(;;) {
 		fdMax = initSet(gi, &readfds);
 		if (select(fdMax+1, &readfds, NULL, NULL, NULL) < 1) {
@@ -96,6 +106,7 @@ void multiplexing(struct gameInfo *gi)
 			if (((*gi).usrsList[i]).fd != -1) {
 				if (FD_ISSET(((*gi).usrsList[i]).fd, &readfds)) {
 					takeCom(gi, &((*gi).usrsList[i]));
+					turnEnd(gi);
 				}
 			}
 		}
@@ -104,6 +115,23 @@ void multiplexing(struct gameInfo *gi)
 		}
 	}
 }
+
+void clearUsr(struct usrInfo *ui)
+{
+	(*ui).fd = -1;
+	if ((*ui).buf != NULL) {
+		free((*ui).buf);
+		(*ui).buf = NULL;
+	}
+	(*ui).bufSize = 0;
+	(*ui).status = blocked;
+	(*ui).fact = (*ui).availFact = initFactory;
+	(*ui).raw = initRaw;
+	(*ui).prod = (*ui).availProd = initProd;
+	(*ui).money = initMoney;
+	delFact(&(*ui).building);
+}
+
 
 int initSet(struct gameInfo *gi, fd_set *readfds)
 {
@@ -120,96 +148,6 @@ int initSet(struct gameInfo *gi, fd_set *readfds)
 		}
 	}
 	return fdMax;
-}
-
-void initMarket(struct gameInfo *gi)
-{
-	(*gi).month = 1;
-	(*gi).level = startLevel;
-	itemsAndPrice(gi);
-	delItems(&(*gi).rawApp);	
-	delItems(&(*gi).prodApp);
-}
-
-void itemsAndPrice(struct gameInfo *gi)
-{
-	int n;
-	n = curNum(gi);
-	(*gi).raw = (int)((0.5 + 0.5 * (*gi).level) * n);
-	(*gi).prod = (int)((3.5 - 0.5 * (*gi).level) * n);
-	(*gi).prodPrice = 7000 - 500 * (*gi).level;
-	if ((*gi).level == 1) {
-		(*gi).rawPrice = 800;
-	} else if ((*gi).level == 2) {
-		(*gi).rawPrice = 650;
-	} else if ((*gi).level == 3) {
-		(*gi).rawPrice = 500;
-	} else if ((*gi).level == 4) {
-		(*gi).rawPrice = 400;
-	} else {
-		(*gi).rawPrice = 300;
-	}
-}
-
-void initList(struct usrInfo **ui, int numUsrs)
-{
-	int i;
-	*ui = malloc(numUsrs*sizeof(**ui));
-	for(i = 0; i < numUsrs; i++) {
-		((*ui)[i]).fd = -1;
-		((*ui)[i]).buf = NULL;
-		((*ui)[i]).bufSize = 0;
-		((*ui)[i]).addr = NULL;
-		((*ui)[i]).addrlen = 0;
-		((*ui)[i]).number = i+1;
-		((*ui)[i]).status = blocked;
-		((*ui)[i]).fact = ((*ui)[i]).availFact = initFactory;
-		((*ui)[i]).raw = initRaw;
-		((*ui)[i]).prod = ((*ui)[i]).availProd = initProd;
-		((*ui)[i]).money = initMoney;
-		((*ui)[i]).building = NULL;
-	}
-}
-
-void clearUsr(struct usrInfo *ui)
-{
-	(*ui).fd = -1;
-	if ((*ui).buf != NULL) {
-		free((*ui).buf);
-	}
-	(*ui).buf = NULL;
-	(*ui).bufSize = 0;
-	if ((*ui).addr != NULL) {
-		free((*ui).addr);
-	}
-	(*ui).addr = NULL;
-	(*ui).addrlen = 0;
-	(*ui).status = blocked;
-	(*ui).fact = (*ui).availFact = initFactory;
-	(*ui).raw = initRaw;
-	(*ui).prod = (*ui).availProd = initProd;
-	(*ui).money = initMoney;
-	delFact(&(*ui).building);
-}
-
-void delFact(struct factory **first)
-{
-	struct factory *help;
-	while(*first != NULL) {
-		help = *first;
-		*first = (**first).next;
-		free(help);
-	}
-}
-
-void delItems(struct items **first)
-{
-	struct items *help;
-	while(*first != NULL) {
-		help = *first;
-		*first = (**first).next;
-		free(help);
-	}
 }
 
 void takeCom(struct gameInfo *gi, struct usrInfo *ui)
@@ -236,45 +174,418 @@ void takeCom(struct gameInfo *gi, struct usrInfo *ui)
 		}
 		delList(list);
 	}
-	checkAtStep(gi);
 }
 
-void takeUsr(struct gameInfo *gi)
+int addBuf(struct usrInfo *ui)
+{
+	char buf[1024];
+	int j, res;
+	char *new;
+	res = read((*ui).fd, buf, sizeof(buf));
+	if (res > 0) {
+		new = malloc(sizeof(*new)*((*ui).bufSize + res));
+		for(j = 0; j < (*ui).bufSize; j++) {
+			new[j] = (*ui).buf[j];
+		}
+		for(j = 0; j < res; j++) {
+			new[j+(*ui).bufSize] = buf[j];
+		}
+		if ((*ui).buf != NULL) {
+			free((*ui).buf);
+		}
+		(*ui).buf = new;
+		(*ui).bufSize += res;
+	}
+	return res;
+}
+
+void deactivate(struct gameInfo *gi, struct usrInfo *ui, int stat)
+{
+	char buf[1024];
+	int i, j, n = 0;
+	shutdown((*ui).fd, 2);
+	close((*ui).fd);
+	clearUsr(ui);
+	if (stat == leave) {
+		sprintf(buf, "\nPlayer %d left the game", (*ui).number);
+	} else {
+		sprintf(buf, "\nPlayer %d is bankrupt", (*ui).number);
+	}
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		if (((*gi).usrsList[i]).fd != -1) {
+			j = i;
+			writeStr(((*gi).usrsList[i]).fd, buf);
+			if ((*gi).month && stat == leave) {
+				writeStr(((*gi).usrsList[i]).fd, "\n  >  ");
+			}
+			n++;
+		} 
+	}
+	if (n == 0) {
+		(*gi).month = 0;
+	} else if (n == 1 && (*gi).month != 0) {
+		writeStr(((*gi).usrsList[j]).fd, "\nYou won\n");
+		deactivate(gi, &((*gi).usrsList[j]), leave);
+	}
+}
+
+void delFact(struct factory **first)
+{
+	struct factory *help;
+	while(*first != NULL) {
+		help = *first;
+		*first = (**first).next;
+		free(help);
+	}
+}
+
+int lineFeed(struct usrInfo *ui)
+{
+	int i;
+	for(i = 0; i < (*ui).bufSize; i++) {
+		if ((*ui).buf[i] == '\n') {
+			return i;
+		}
+	}
+	return -1;
+}
+
+struct words *crash(struct usrInfo *ui, int lenght)
+{
+	struct words *list = NULL;
+	struct words *help;
+	struct words **last;
+	int i, j = 0;
+	last = &list;
+	for(i = 0; i < lenght; i++) {
+		if ((*ui).buf[i] == ' ' || (*ui).buf[i] == '\r') {
+			if (j != i) {
+				help = malloc(sizeof(*help));
+				(*help).word = crtWord(ui, j, i);
+				(*help).next = NULL;
+				*last = help;
+				last = &(**last).next;
+				j = i;
+			}
+			j++;
+		}
+	}
+	return list;
+}
+
+char *crtWord(struct usrInfo *ui, int j, int i)
+{
+	int m;
+	char *help;
+	help = malloc((i-j+1)*sizeof(*help));
+	for(m = 0; m < i-j; m++) {
+		help[m] = (*ui).buf[m+j];
+	}
+	help[i-j] = 0;
+	return help;
+}
+
+void clearBuf(struct usrInfo *ui, int lenght)
+{
+	char *new = NULL;
+	int i, n;
+	n = (*ui).bufSize - (lenght + 1);
+	if (n != 0) {
+		new = malloc(n*sizeof(*new));
+		for(i = 0; i < n; i++) {
+			new[i] = (*ui).buf[lenght + 1 +	i];
+		}
+	}
+	free((*ui).buf);
+	(*ui).buf = new;
+	(*ui).bufSize = n;
+}
+
+void putNumUsrs(int fd, int current, int numUsrs)
+{
+	char buf[1024];
+	sprintf(buf, "\nThe number of connected players: %d", current);
+	writeStr(fd, buf);
+	sprintf(buf, "\nThe number of expected players: %d", numUsrs - current);
+	writeStr(fd, buf);
+}
+
+int curNum(struct gameInfo *gi)
+{
+	int i, n = 0;
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		if (((*gi).usrsList[i]).fd != -1) {
+			n++;
+		}
+	}
+	return n;
+}
+
+void defCom(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
+{
+	if (cmpStr((*list).word, "market")) {
+		market(gi, (*ui).fd);
+	} else if (cmpStr((*list).word, "player")) {
+		player(gi, (*ui).fd, (*list).next);
+	} else if (cmpStr((*list).word, "prod")) {
+		prod(gi, ui, (*list).next);
+	} else if (cmpStr((*list).word, "build")) {
+		build(gi, ui, (*list).next);
+	} else if (cmpStr((*list).word, "sell")) {
+		sell(gi, ui, (*list).next);
+	} else if (cmpStr((*list).word, "buy")) {
+		buy(gi, ui, (*list).next);
+	} else if (cmpStr((*list).word, "help")) {
+		writeStr((*ui).fd, HELP);
+	} else if (cmpStr((*list).word, "whoAmI")) {
+		whoAmI(ui);
+	} else if (cmpStr((*list).word, "turn")) {
+		endStep(gi, ui);
+	} else if (cmpStr((*list).word, "quit")) {
+		deactivate(gi, ui, leave);
+	} else {
+		writeStr((*ui).fd, "Unknown command. Type 'help' to get help\n  >  ");
+	}
+}
+
+void market(struct gameInfo *gi, int fd)
 {
 	char buf[128];
-	struct sockaddr_in *addr;
-	socklen_t addrlen;
-	int fd, i;
-	addrlen = sizeof(*addr);
-	addr = malloc(addrlen);
-	if ((fd = accept((*gi).listen, (struct sockaddr*)addr, &addrlen)) == -1) {
-		free(addr);	
-	} else if ((*gi).month) {
-		denied(fd);
-		free(addr);
+	sprintf(buf, "Current month: %d\n", (*gi).month);
+	write(fd, buf, strlen(buf)+1);
+	sprintf(buf, "Current market level: %d\n", (*gi).level);
+	write(fd, buf, strlen(buf)+1);
+	writeStr(fd, "Players still active:\n");
+	sprintf(buf, "#%19d\n", curNum(gi));
+	write(fd, buf, strlen(buf)+1);  
+	writeStr(fd, "Bank sells:    items min.price\n");
+	sprintf(buf, "#%19d%10d\n", (*gi).raw, (*gi).rawPrice);
+	write(fd, buf, strlen(buf)+1);  
+	writeStr(fd, "Bank buys:     items max.price\n");
+	sprintf(buf, "#%19d%10d\n  >  ", (*gi).prod, (*gi).prodPrice);
+	write(fd, buf, strlen(buf)+1);  
+}
+
+void player(struct gameInfo *gi, int fd, struct words *list)
+{
+	char *endptr = NULL;
+	int i, n;
+	if (list == NULL) {
+		writeStr(fd, FORGOTPLAYER);
 	} else {
-		for(i = 0; i < (*gi).numUsrs; i++) {
-			if (((*gi).usrsList[i]).fd == -1) {
-				sprintf(buf, "\nPlayer %d added", ((*gi).usrsList[i]).number);
-				writeStrAll(gi, buf);
-				((*gi).usrsList[i]).fd = fd;
-				((*gi).usrsList[i]).addr = addr;
-				((*gi).usrsList[i]).addrlen = addrlen;
-				sprintf(buf, "\nYou are Player %d", ((*gi).usrsList[i]).number);
-				writeStr(((*gi).usrsList[i]).fd, buf);
-				putNumUsrs(((*gi).usrsList[i]).fd, curNum(gi), (*gi).numUsrs);
-				break;
+		i = strtol((*list).word, &endptr, 10);
+		n = (*gi).numUsrs;
+		if ((*list).word[0] != '\0' && *endptr == '\0' && i > 0 && i <= n) {
+			if (((*gi).usrsList[i-1]).fd != -1) {
+				printPlayer((*gi).usrsList[i-1], fd);
+			} else {
+				writeStr(fd, LEFTGAME);
+			}
+		} else {
+			writeStr(fd, INCORNUM);
+		}
+	}
+}
+
+void printPlayer(struct usrInfo ui, int fd)
+{
+	char buf[128];
+	writeStr(fd, "     money   factory       raw  products\n");
+	sprintf(buf, "#%9d%10d%10d%10d\n  >  ", ui.money, ui.fact, ui.raw, ui.prod);
+	write(fd, buf, strlen(buf)+1);
+}
+
+void prod(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
+{
+	char *endptr = NULL;
+	int numProd;
+	if ((*ui).status == waiting) {
+		writeStr((*ui).fd, CANT);
+	} else if (list == NULL) {
+		writeStr((*ui).fd, FORGOTPROD);
+	} else {
+		numProd = strtol((*list).word, &endptr, 10);
+		if (numProd <=0) {
+			writeStr((*ui).fd, "Error\n  >  ");
+			return;
+		}
+		if ((*list).word[0] != '\0' && *endptr == '\0') {
+			if (numProd * costOfProd > (*ui).money) {
+				writeStr((*ui).fd, NOTENOUGHMONEY);
+			} else if (numProd > (*ui).raw) {
+				writeStr((*ui).fd, NOTENOUGHRAW);
+			} else if (numProd > (*ui).availFact) {
+				writeStr((*ui).fd, NOTENOUGHFACT);
+			} else {
+				(*ui).money -= numProd * costOfProd;
+				(*ui).raw -= numProd;
+				(*ui).availFact -=numProd;
+				(*ui).prod += numProd;
+				(*ui).availProd += numProd;
+				writeStr((*ui).fd, ACCEPT);
+			}
+		} else {
+			writeStr((*ui).fd, INCORPROD);
+		}
+	}
+}
+
+void build(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
+{
+	char *endptr = NULL;
+	int numFact;
+	if ((*ui).status == waiting) {
+		writeStr((*ui).fd, CANT);
+	} else if (list == NULL) {
+		writeStr((*ui).fd, FORGOTFACT);
+	} else {
+		numFact = strtol((*list).word, &endptr, 10);
+		if (numFact <=0) {
+			writeStr((*ui).fd, "Error\n  >  ");
+			return;
+		}
+		if ((*list).word[0] != '\0' && *endptr == '\0') {
+			if (numFact * costOfFact > (*ui).money) {
+				writeStr((*ui).fd, NOTENOUGHMONEY);
+			} else {
+				(*ui).money -= numFact * costOfFact;
+				addFact(&((*ui).building), numFact, (*gi).month);
+				writeStr((*ui).fd, ACCEPT);
+			}
+		} else {
+			writeStr((*ui).fd, INCORFACT);
+		}
+	}
+}
+
+void addFact(struct factory **first, int numFact, int month)
+{
+	struct factory *help;
+	help = malloc(sizeof(*help));
+	(*help).month = month + constTime;
+	(*help).num = numFact;
+	(*help).next = *first;
+	*first = help;
+}
+
+void sell(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
+{
+	char *endptr1, *endptr2;
+	int numProd, price;
+	if ((*ui).status == waiting) {
+		writeStr((*ui).fd, CANT);
+	} else if (list == NULL) {
+		writeStr((*ui).fd, FORGOTPROD);
+	} else if ((*list).next == NULL) {
+		writeStr((*ui).fd, FORGOTPRODPRICE);
+	} else {
+		numProd = strtol((*list).word, &endptr1, 10);
+		price = strtol((*(*list).next).word, &endptr2, 10);
+		if (numProd <=0) {
+			writeStr((*ui).fd, "Error\n  >  ");
+			return;
+		}
+		if (price <=0) {
+			writeStr((*ui).fd, "Error\n  >  ");
+			return;
+		}
+		if ((*(*list).next).word[0] == '\0' || *endptr2 != '\0')  {
+			writeStr((*ui).fd, INCORPRICE);
+		} else if ((*list).word[0] == '\0' || *endptr1 != '\0') {
+			writeStr((*ui).fd, INCORPROD);
+		} else {
+			if (numProd > (*ui).availProd) {
+				writeStr((*ui).fd, NOTENOUGHPROD);
+			} else if (price > (*gi).prodPrice) {
+				writeStr((*ui).fd, HIGHPRICE);
+			} else {
+				(*ui).availProd -= numProd;
+				addItems(&((*gi).prodApp), numProd, price, (*ui).number);
+				writeStr((*ui).fd, ACCEPT);
 			}
 		}
 	}
-	if ((*gi).month == 0) {
-		checkAtBegin(gi);
+}
+
+void buy(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
+{
+	char *endptr1, *endptr2;
+	int numRaw, price;
+	if ((*ui).status == waiting) {
+		writeStr((*ui).fd, CANT);
+	} else if (list == NULL) {
+		writeStr((*ui).fd, FORGOTRAW);
+	} else if ((*list).next == NULL) {
+		writeStr((*ui).fd, FORGOTRAWPRICE);
+	} else {
+		numRaw = strtol((*list).word, &endptr1, 10);
+		price = strtol((*(*list).next).word, &endptr2, 10);
+		if (numRaw <=0) {
+			writeStr((*ui).fd, "Error\n  >  ");
+			return;
+		}
+		if (price <=0) {
+			writeStr((*ui).fd, "Error\n  >  ");
+			return;
+		}
+		if ((*(*list).next).word[0] == '\0' || *endptr2 != '\0')  {
+			writeStr((*ui).fd, INCORPRICE);
+		} else if ((*list).word[0] == '\0' || *endptr1 != '\0') {
+			writeStr((*ui).fd, INCORRAW);
+		} else {
+			if (price < (*gi).rawPrice) {
+				writeStr((*ui).fd, LOWPRICE);
+			} else {
+				addItems(&((*gi).rawApp), numRaw, price, (*ui).number);
+				writeStr((*ui).fd, ACCEPT);
+			}
+		}
 	}
 }
 
-void checkAtStep(struct gameInfo *gi)
+void addItems(struct items **first, int num, int price, int i)
+{
+	struct items *help;
+	help = malloc(sizeof(*help));
+	(*help).num = num;
+	(*help).price = price;
+	(*help).numPlayer = i;
+	(*help).next = *first;
+	*first = help;
+}
+
+void whoAmI(struct usrInfo *ui)
+{
+	char buf[128];	
+	sprintf(buf, "You are Player %d\n  >  ", (*ui).number);
+	writeStr((*ui).fd, buf);
+}
+
+void endStep(struct gameInfo *gi, struct usrInfo *ui)
+{
+	if ((*ui).status == active) {
+		(*ui).status = waiting;
+		writeStr((*ui).fd, "  >  ");
+	} else {
+		writeStr((*ui).fd, CANT);
+	}
+}
+
+void delList(struct words *list)
+{
+	struct words *help;
+	while(list != NULL) {
+		free((*list).word);
+		help = list;
+		list = (*list).next;
+		free(help);
+	}
+}
+
+void turnEnd(struct gameInfo *gi)
 {
 	int i;
+	char buf[128];
 	for(i = 0; i < (*gi).numUsrs; i++) {
 		if (((*gi).usrsList[i]).fd != -1) {
 			if (((*gi).usrsList[i]).status != waiting) {
@@ -282,29 +593,9 @@ void checkAtStep(struct gameInfo *gi)
 			}
 		}
 	}
-	turnEnd(gi);
-}
-
-void checkAtBegin(struct gameInfo *gi)
-{
-	int i, fd;
-	for(i = 0; i < (*gi).numUsrs; i++) {
-		if (((*gi).usrsList[i]).fd == -1) {
-			return;
-		}
+	if ((*gi).month != 0) {
+		(*gi).month++;
 	}
-	initMarket(gi);
-	for(i = 0; i < (*gi).numUsrs; i++) {
-		((*gi).usrsList[i]).status = active;
-		fd = ((*gi).usrsList[i]).fd;
-		writeStr(fd, "\nThe game has begun. Type 'help' to get help\n  >  ");
-	}
-}
-
-void turnEnd(struct gameInfo *gi)
-{
-	char buf[128];
-	(*gi).month++;
 	writeStrAll(gi, "\nThe auction began");
 	whoWant(gi, (*gi).rawApp, (*gi).prodApp);
 	sort(&(*gi).rawApp, dec);
@@ -314,8 +605,8 @@ void turnEnd(struct gameInfo *gi)
 	removeCosts((*gi).usrsList, (*gi).numUsrs);
 	buildFactory((*gi).usrsList, (*gi).numUsrs, (*gi).month);
 	changeLevel(gi);
-	itemsAndPrice(gi);
 	checkBankrupt(gi, (*gi).usrsList);
+	itemsAndPrice(gi);
 	sprintf(buf, "\nNew market level: %d\n  >  ", (*gi).level);
 	writeStrAll(gi, buf); 
 	activate((*gi).usrsList, (*gi).numUsrs);
@@ -334,6 +625,39 @@ void whoWant(struct gameInfo *gi, struct items *r, struct items *p)
 		writeStrAll(gi, buf);
 		p = (*p).next;
 	}
+}
+
+void sort(struct items **first, int order)
+{
+	struct items **cur;
+	struct items **minAddr;
+	struct items *help;
+	struct items *new = NULL;
+	int min;
+	while(*first != NULL) {
+		min = (**first).price;
+		minAddr = first;
+		cur = &(**first).next;
+		while(*cur != NULL) {
+			if (order == dec) {
+				if ((**cur).price < min) {
+					min = (**cur).price;
+					minAddr = cur;
+				} 
+			} else {
+				if ((**cur).price > min) {
+					min = (**cur).price;
+					minAddr = cur;
+				}
+			}
+			cur = &(**cur).next;
+		}
+		help = *minAddr;
+		*minAddr = (**minAddr).next;
+		(*help).next = new;
+		new = help;
+	}
+	*first =new;
 }
 
 void auctionRaw(struct gameInfo *gi)
@@ -436,6 +760,16 @@ void chooseProdApp(struct gameInfo *gi, int n)
 	free(help);
 }
 
+void delItems(struct items **first)
+{
+	struct items *help;
+	while(*first != NULL) {
+		help = *first;
+		*first = (**first).next;
+		free(help);
+	}
+}
+
 void printBankSold(struct gameInfo *gi, int i, int n, int p)
 {
 	char buf[128];
@@ -463,52 +797,6 @@ int numItems(struct items *first, int *n)
 		(*n)++;
 	}
 	return item;
-}
-
-void checkBankrupt(struct gameInfo *gi, struct usrInfo *ui)
-{
-	int i;
-	for(i = 0; i < (*gi).numUsrs; i++) {
-		if ((ui[i]).fd != -1) {
-			if ((ui[i]).money < 0) {
-				writeStr((ui[i]).fd, "\nYou are a bankrupt\n");
-				deactivate(gi, &(ui[i]), bankrupt);
-			}
-		}
-	}
-}
-
-void sort(struct items **first, int order)
-{
-	struct items **cur;
-	struct items **minAddr;
-	struct items *help;
-	struct items *new = NULL;
-	int min;
-	while(*first != NULL) {
-		min = (**first).price;
-		minAddr = first;
-		cur = &(**first).next;
-		while(*cur != NULL) {
-			if (order == dec) {
-				if ((**cur).price < min) {
-					min = (**cur).price;
-					minAddr = cur;
-				} 
-			} else {
-				if ((**cur).price > min) {
-					min = (**cur).price;
-					minAddr = cur;
-				}
-			}
-			cur = &(**cur).next;
-		}
-		help = *minAddr;
-		*minAddr = (**minAddr).next;
-		(*help).next = new;
-		new = help;
-	}
-	*first =new;
 }
 
 void removeCosts(struct usrInfo *ui, int numUsrs)
@@ -546,18 +834,6 @@ void buildFactory(struct usrInfo *ui, int numUsrs, int month)
 	}
 }
 
-void activate(struct usrInfo *ui, int numUsrs)
-{
-	int i;
-	for(i = 0; i < numUsrs; i++) {
-		if ((ui[i]).fd != -1) {
-			(ui[i]).availFact = (ui[i]).fact;
-			(ui[i]).availProd = (ui[i]).prod;
-			(ui[i]).status = active;
-		}
-	}
-}
-
 void changeLevel(struct gameInfo *gi)
 {
 	const int probArr[5][5] = {
@@ -578,401 +854,103 @@ void changeLevel(struct gameInfo *gi)
 	}
 }
 
-void deactivate(struct gameInfo *gi, struct usrInfo *ui, int stat)
-{
-	char buf[1024];
-	int i, j, n = 0;
-	shutdown((*ui).fd, 2);
-	close((*ui).fd);
-	clearUsr(ui);
-	if (stat == leave) {
-		sprintf(buf, "\nPlayer %d left the game", (*ui).number);
-	} else {
-		sprintf(buf, "\nPlayer %d is bankrupt", (*ui).number);
-	}
-	for(i = 0; i < (*gi).numUsrs; i++) {
-		if (((*gi).usrsList[i]).fd != -1) {
-			j = i;
-			writeStr(((*gi).usrsList[i]).fd, buf);
-			if ((*gi).month && stat == leave) {
-				writeStr(((*gi).usrsList[i]).fd, "\n  >  ");
-			}
-			n++;
-		} 
-	}
-	if (n == 0) {
-		(*gi).month = 0;
-	} else if (n == 1) {
-		writeStr(((*gi).usrsList[j]).fd, "\nYou won\n");
-		deactivate(gi, &((*gi).usrsList[j]), leave);
-	}
-}
-
-void delList(struct words *list)
-{
-	struct words *help;
-	while(list != NULL) {
-		free((*list).word);
-		help = list;
-		list = (*list).next;
-		free(help);
-	}
-}
-
-void defCom(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
-{
-	if (cmpStr((*list).word, "market")) {
-		market(gi, (*ui).fd);
-	} else if (cmpStr((*list).word, "player")) {
-		player(gi, (*ui).fd, (*list).next);
-	} else if (cmpStr((*list).word, "prod")) {
-		prod(gi, ui, (*list).next);
-	} else if (cmpStr((*list).word, "build")) {
-		build(gi, ui, (*list).next);
-	} else if (cmpStr((*list).word, "sell")) {
-		sell(gi, ui, (*list).next);
-	} else if (cmpStr((*list).word, "buy")) {
-		buy(gi, ui, (*list).next);
-	} else if (cmpStr((*list).word, "help")) {
-		help((*ui).fd);
-	} else if (cmpStr((*list).word, "whoAmI")) {
-		whoAmI(ui);
-	} else if (cmpStr((*list).word, "turn")) {
-		endStep(gi, ui);
-	} else if (cmpStr((*list).word, "quit")) {
-		deactivate(gi, ui, leave);
-	} else {
-		writeStr((*ui).fd, "Unknown command. Type 'help' to get help\n  >  ");
-	}
-}
-
-void market(struct gameInfo *gi, int fd)
-{
-	char buf[128];
-	sprintf(buf, "Current month: %d\n", (*gi).month);
-	write(fd, buf, strlen(buf)+1);
-	sprintf(buf, "Current market level: %d\n", (*gi).level);
-	write(fd, buf, strlen(buf)+1);
-	writeStr(fd, "Players still active:\n");
-	sprintf(buf, "#%19d\n", curNum(gi));
-	write(fd, buf, strlen(buf)+1);  
-	writeStr(fd, "Bank sells:    items min.price\n");
-	sprintf(buf, "#%19d%10d\n", (*gi).raw, (*gi).rawPrice);
-	write(fd, buf, strlen(buf)+1);  
-	writeStr(fd, "Bank buys:     items max.price\n");
-	sprintf(buf, "#%19d%10d\n  >  ", (*gi).prod, (*gi).prodPrice);
-	write(fd, buf, strlen(buf)+1);  
-}
-
-void player(struct gameInfo *gi, int fd, struct words *list)
-{
-	char *endptr = NULL;
-	int i, n;
-	if (list == NULL) {
-		writeStr(fd, FORGOTPLAYER);
-	} else {
-		i = strtol((*list).word, &endptr, 10);
-		n = (*gi).numUsrs;
-		if ((*list).word[0] != '\0' && *endptr == '\0' && i > 0 && i <= n) {
-			if (((*gi).usrsList[i-1]).fd != -1) {
-				printPlayer((*gi).usrsList[i-1], fd);
-			} else {
-				writeStr(fd, LEFTGAME);
-			}
-		} else {
-			writeStr(fd, INCORNUM);
-		}
-	}
-}
-
-void printPlayer(struct usrInfo ui, int fd)
-{
-	char buf[128];
-	writeStr(fd, "     money   factory       raw  products\n");
-	sprintf(buf, "#%9d%10d%10d%10d\n", ui.money, ui.fact, ui.raw, ui.prod);
-	write(fd, buf, strlen(buf)+1);
-	writeStr(fd, "  >  ");
-}
-
-void prod(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
-{
-	char *endptr = NULL;
-	int numProd;
-	if ((*ui).status == waiting) {
-		writeStr((*ui).fd, CANT);
-	} else if (list == NULL) {
-		writeStr((*ui).fd, FORGOTPROD);
-	} else {
-		numProd = strtol((*list).word, &endptr, 10);
-		if ((*list).word[0] != '\0' && *endptr == '\0') {
-			if (numProd * costOfProd > (*ui).money) {
-				writeStr((*ui).fd, NOTENOUGHMONEY);
-			} else if (numProd > (*ui).raw) {
-				writeStr((*ui).fd, NOTENOUGHRAW);
-			} else if (numProd > (*ui).availFact) {
-				writeStr((*ui).fd, NOTENOUGHFACT);
-			} else {
-				(*ui).money -= numProd * costOfProd;
-				(*ui).raw -= numProd;
-				(*ui).availFact -=numProd;
-				(*ui).prod += numProd;
-				(*ui).availProd += numProd;
-				writeStr((*ui).fd, ACCEPT);
-			}
-		} else {
-			writeStr((*ui).fd, INCORPROD);
-		}
-	}
-}
-
-void build(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
-{
-	char *endptr = NULL;
-	int numFact;
-	if ((*ui).status == waiting) {
-		writeStr((*ui).fd, CANT);
-	} else if (list == NULL) {
-		writeStr((*ui).fd, FORGOTFACT);
-	} else {
-		numFact = strtol((*list).word, &endptr, 10);
-		if ((*list).word[0] != '\0' && *endptr == '\0') {
-			if (numFact * costOfFact > (*ui).money) {
-				writeStr((*ui).fd, NOTENOUGHMONEY);
-			} else {
-				(*ui).money -= numFact * costOfFact;
-				addFact(&((*ui).building), numFact, (*gi).month);
-				writeStr((*ui).fd, ACCEPT);
-			}
-		} else {
-			writeStr((*ui).fd, INCORFACT);
-		}
-	}
-}
-
-void sell(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
-{
-	char *endptr1, *endptr2;
-	int numProd, price;
-	if ((*ui).status == waiting) {
-		writeStr((*ui).fd, CANT);
-	} else if (list == NULL) {
-		writeStr((*ui).fd, FORGOTPROD);
-	} else if ((*list).next == NULL) {
-		writeStr((*ui).fd, FORGOTPRODPRICE);
-	} else {
-		numProd = strtol((*list).word, &endptr1, 10);
-		price = strtol((*(*list).next).word, &endptr2, 10);
-		if ((*(*list).next).word[0] == '\0' || *endptr2 != '\0')  {
-			writeStr((*ui).fd, INCORPRICE);
-		} else if ((*list).word[0] == '\0' || *endptr1 != '\0') {
-			writeStr((*ui).fd, INCORPROD);
-		} else {
-			if (numProd > (*ui).availProd) {
-				writeStr((*ui).fd, NOTENOUGHPROD);
-			} else if (price > (*gi).prodPrice) {
-				writeStr((*ui).fd, HIGHPRICE);
-			} else {
-				(*ui).availProd -= numProd;
-				addItems(&((*gi).prodApp), numProd, price, (*ui).number);
-				writeStr((*ui).fd, ACCEPT);
-			}
-		}
-	}
-}
-
-void buy(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
-{
-	char *endptr1, *endptr2;
-	int numRaw, price;
-	if ((*ui).status == waiting) {
-		writeStr((*ui).fd, CANT);
-	} else if (list == NULL) {
-		writeStr((*ui).fd, FORGOTRAW);
-	} else if ((*list).next == NULL) {
-		writeStr((*ui).fd, FORGOTRAWPRICE);
-	} else {
-		numRaw = strtol((*list).word, &endptr1, 10);
-		price = strtol((*(*list).next).word, &endptr2, 10);
-		if ((*(*list).next).word[0] == '\0' || *endptr2 != '\0')  {
-			writeStr((*ui).fd, INCORPRICE);
-		} else if ((*list).word[0] == '\0' || *endptr1 != '\0') {
-			writeStr((*ui).fd, INCORRAW);
-		} else {
-			if (price < (*gi).rawPrice) {
-				writeStr((*ui).fd, LOWPRICE);
-			} else {
-				addItems(&((*gi).rawApp), numRaw, price, (*ui).number);
-				writeStr((*ui).fd, ACCEPT);
-			}
-		}
-	}
-}
-
-void addItems(struct items **first, int num, int price, int i)
-{
-	struct items *help;
-	help = malloc(sizeof(*help));
-	(*help).num = num;
-	(*help).price = price;
-	(*help).numPlayer = i;
-	(*help).next = *first;
-	*first = help;
-}
-
-void help(int fd)
-{
-	writeStr(fd, MARKET PLAYER PROD BUY SELL BUILD HELP WHO TURN QUIT);
-}
-
-void whoAmI(struct usrInfo *ui)
-{
-	char buf[128];	
-	sprintf(buf, "You are Player %d\n  >  ", (*ui).number);
-	writeStr((*ui).fd, buf);
-}
-
-void endStep(struct gameInfo *gi, struct usrInfo *ui)
-{
-	if ((*ui).status == active) {
-		(*ui).status = waiting;
-		writeStr((*ui).fd, "  >  ");
-	} else {
-		writeStr((*ui).fd, CANT);
-	}
-}
-
-void addFact(struct factory **first, int numFact, int month)
-{
-	struct factory *help;
-	help = malloc(sizeof(*help));
-	(*help).month = month + constTime;
-	(*help).num = numFact;
-	(*help).next = *first;
-	*first = help;
-}
-
-void putNumUsrs(int fd, int current, int numUsrs)
-{
-	char buf[1024];
-	sprintf(buf, "\nThe number of connected players: %d", current);
-	writeStr(fd, buf);
-	sprintf(buf, "\nThe number of expected players: %d", numUsrs - current);
-	writeStr(fd, buf);
-}
-
-int addBuf(struct usrInfo *ui)
-{
-	char buf[1024];
-	int j, res;
-	char *new;
-	res = read((*ui).fd, buf, sizeof(buf));
-	if (res > 0) {
-		new = malloc(sizeof(*new)*((*ui).bufSize + res));
-		for(j = 0; j < (*ui).bufSize; j++) {
-			new[j] = (*ui).buf[j];
-		}
-		for(j = 0; j < res; j++) {
-			new[j+(*ui).bufSize] = buf[j];
-		}
-		if ((*ui).buf != NULL) {
-			free((*ui).buf);
-		}
-		(*ui).buf = new;
-		(*ui).bufSize += res;
-	}
-	return res;
-}
-
-int lineFeed(struct usrInfo *ui)
+void checkBankrupt(struct gameInfo *gi, struct usrInfo *ui)
 {
 	int i;
-	for(i = 0; i < (*ui).bufSize; i++) {
-		if ((*ui).buf[i] == '\n') {
-			return i;
-		}
-	}
-	return -1;
-}
-
-struct words *crash(struct usrInfo *ui, int lenght)
-{
-	struct words *list = NULL;
-	struct words *help;
-	struct words **last;
-	int i, j = 0;
-	last = &list;
-	for(i = 0; i < lenght; i++) {
-		if ((*ui).buf[i] == ' ' || (*ui).buf[i] == '\r') {
-			if (j != i) {
-				help = malloc(sizeof(*help));
-				(*help).word = crtWord(ui, j, i);
-				(*help).next = NULL;
-				*last = help;
-				last = &(**last).next;
-				j = i;
-			}
-			j++;
-		}
-	}
-	return list;
-}
-
-char *crtWord(struct usrInfo *ui, int j, int i)
-{
-	int m;
-	char *help;
-	help = malloc((i-j+1)*sizeof(*help));
-	for(m = 0; m < i-j; m++) {
-		help[m] = (*ui).buf[m+j];
-	}
-	help[i-j] = 0;
-	return help;
-}
-
-void clearBuf(struct usrInfo *ui, int lenght)
-{
-	char *new = NULL;
-	int i, n;
-	n = (*ui).bufSize - (lenght + 1);
-	if (n != 0) {
-		new = malloc(n*sizeof(*new));
-		for(i = 0; i < n; i++) {
-			new[i] = (*ui).buf[lenght + 1 +	i];
-		}
-	}
-	free((*ui).buf);
-	(*ui).buf = new;
-	(*ui).bufSize = n;
-}
-
-void denied(int fd)
-{
-	writeStr(fd, "The game has already started\n");
-	shutdown(fd, 2);
-	close(fd);
-}
-
-int curNum(struct gameInfo *gi)
-{
-	int i, n = 0;
 	for(i = 0; i < (*gi).numUsrs; i++) {
-		if (((*gi).usrsList[i]).fd != -1) {
-			n++;
+		if ((ui[i]).fd != -1) {
+			if ((ui[i]).money < 0) {
+				writeStr((ui[i]).fd, "\nYou are a bankrupt\n");
+				deactivate(gi, &(ui[i]), bankrupt);
+			}
 		}
 	}
-	return n;
+}
+
+void itemsAndPrice(struct gameInfo *gi)
+{
+	int n;
+	n = curNum(gi);
+	(*gi).raw = (int)((0.5 + 0.5 * (*gi).level) * n);
+	(*gi).prod = (int)((3.5 - 0.5 * (*gi).level) * n);
+	(*gi).prodPrice = 7000 - 500 * (*gi).level;
+	if ((*gi).level == 1) {
+		(*gi).rawPrice = 800;
+	} else if ((*gi).level == 2) {
+		(*gi).rawPrice = 650;
+	} else if ((*gi).level == 3) {
+		(*gi).rawPrice = 500;
+	} else if ((*gi).level == 4) {
+		(*gi).rawPrice = 400;
+	} else {
+		(*gi).rawPrice = 300;
+	}
+}
+
+void activate(struct usrInfo *ui, int numUsrs)
+{
+	int i;
+	for(i = 0; i < numUsrs; i++) {
+		if ((ui[i]).fd != -1) {
+			(ui[i]).availFact = (ui[i]).fact;
+			(ui[i]).availProd = (ui[i]).prod;
+			(ui[i]).status = active;
+		}
+	}
+}
+
+void takeUsr(struct gameInfo *gi)
+{
+	char buf[128];
+	int fd, i, n;
+	if ((fd = accept((*gi).listen, NULL, NULL)) != -1) {
+		if ((*gi).month) {
+			writeStr(fd, "The game has already started\n");
+			shutdown(fd, 2);
+			close(fd);
+		} else {
+			for(i = 0; i < (*gi).numUsrs; i++) {
+				if (((*gi).usrsList[i]).fd == -1) {
+					sprintf(buf, ADDED, ((*gi).usrsList[i]).number);
+					writeStrAll(gi, buf);
+					((*gi).usrsList[i]).fd = fd;
+					sprintf(buf, YOUARE, ((*gi).usrsList[i]).number);
+					writeStr(((*gi).usrsList[i]).fd, buf);
+					n = curNum(gi);
+					putNumUsrs(((*gi).usrsList[i]).fd, n, (*gi).numUsrs);
+					break;
+				}
+			}
+		}
+	}
+	if ((*gi).month == 0) {
+		checkAtBegin(gi);
+	}
+}
+
+void checkAtBegin(struct gameInfo *gi)
+{
+	int i, fd;
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		if (((*gi).usrsList[i]).fd == -1) {
+			return;
+		}
+	}
+	(*gi).month = 1;
+	(*gi).level = startLevel;
+	itemsAndPrice(gi);
+	delItems(&(*gi).rawApp);	
+	delItems(&(*gi).prodApp);
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		((*gi).usrsList[i]).status = active;
+		fd = ((*gi).usrsList[i]).fd;
+		writeStr(fd, "\nThe game has begun. Type 'help' to get help\n  >  ");
+	}
 }
 
 void writeStr(int fd, const char *str)
 {
-	write(fd, str, strlen(str)+1);
-}
-
-void writeInt(int fd, int num)
-{
-	char buf[1024];
-	sprintf(buf, "%d", num);
-	write(fd, buf, strlen(buf)+1);
+	write(fd, str, strlen(str));
 }
 
 int writeStrAll(struct gameInfo *gi, const char *str)
@@ -980,20 +958,7 @@ int writeStrAll(struct gameInfo *gi, const char *str)
 	int i, n = 0;
 	for(i = 0; i < (*gi).numUsrs; i++) {
 		if (((*gi).usrsList[i]).fd != -1) {
-			write(((*gi).usrsList[i]).fd, str, strlen(str)+1); 	
-		}
-	}
-	return n;
-}
-
-int writeIntAll(struct gameInfo *gi, int num)
-{
-	char buf[1024];
-	int i, n = 0;
-	for(i = 0; i < (*gi).numUsrs; i++) {
-		if (((*gi).usrsList[i]).fd != -1) {
-			sprintf(buf, "%d", num);
-			write(((*gi).usrsList[i]).fd, buf, strlen(buf)+1);
+			write(((*gi).usrsList[i]).fd, str, strlen(str)); 	
 		}
 	}
 	return n;
