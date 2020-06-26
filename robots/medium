@@ -1,0 +1,46 @@
+birth
+	PrintMarketInfo()
+	PrintMyInfo()
+\Produce products
+	int pp(0)
+	if (MyRaw < MyFact + MyAfact*2) {
+		pp = MyRaw;
+	} else {
+		pp = MyFact + MyAfact*2;
+	}
+	if (pp*2000 >= MyMoney) {
+		pp = MyMoney / 2000;
+	}
+	prod(pp)
+\Sell products
+	int i(0), SumProd(0), sp(0)
+	while((i = i + 1) <= MaxNum) {				\Get product another players
+		if (PlayerActive(i)) {
+			SumProd = SumProd + PlayerProd(i);
+		}
+	}
+	if (SumProd <= MaxProd) {
+		sell(MyProd, MaxProdPrice)
+	} else {
+		if (MaxProd < MyProd) {
+			sp = MaxProd;
+		} else {
+			sp = MyProd;
+		}
+		sell(sp, MaxProdPrice - 1008)
+	}
+\Buy raws
+	int remain(MyMoney - pp*2000 - (MyRaw - pp)*300 - (MyProd - sp)*500)
+	remain = remain - MyFact*1000 - MyAfact*1500;
+	if (remain > 0) {
+		if (remain / MaxRaw < MinRawPrice) {
+			buy(remain / MinRawPrice, MinRawPrice)
+		} else {
+			if (remain / MaxRaw >= MinRawPrice + 1500) {
+				buy(MaxRaw, MinRawPrice + 1500)
+			} else {
+				buy(MaxRaw, remain / MaxRaw)
+			}
+		}
+	}
+death

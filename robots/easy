@@ -1,0 +1,7 @@
+birth
+	PrintMarketInfo()
+	PrintMyInfo()
+	prod(2)
+	sell(MyProd, MaxProdPrice)
+	buy(2, MinRawPrice)
+death
