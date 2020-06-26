@@ -3,18 +3,19 @@
 
 #include "lexeme.h"
 #include "tables.h"
-#include <string.h>
+#include "MyString.h"
 
 class Automat {
 	enum {
-		H, String, Ident, Int, Real, Equal, lg, 
+		H, String, Ident, Int, Real, Equal, LessGreater, 
 		Comment, MultiAssign, Error, S, SResend
 	};
 	enum {MaxBuf = 4096};
 	Lexeme *lex;
 	char buf[MaxBuf];
 	int BufSize, state, line;
-	Lexeme *StateS(char c, int begin);
+	Lexeme *StateS(char c);
+	Lexeme *StateSResend(char c);
 	void ChangeState(char c);
 	void StateH(char c);
 	void StateString(char c);
@@ -30,8 +31,10 @@ class Automat {
 	int GetLexNum();
 	int Letter(char c); 
 	int Digit(char c);
+	int Space(char c);
 	int EndLine(char c);
 	int Brace(char c);
+	int Arithmetic(char c);
 	int Compare(char c);
 	int Single(char c);
 	int Other(char c);

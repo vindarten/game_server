@@ -21,6 +21,7 @@ public:
 	void AddComp(Ipn *ipn, int oper, int LineNum);
 	void AddAddSub(Ipn *ipn, int oper, int LineNum);
 	void AddMulDiv(Ipn *ipn, int oper, int LineNum);
+	void AddUnSub(Ipn *ipn, int LineNum);
 	void AddNeg(Ipn *ipn, int LineNum);
 	void MetRParen(Ipn *ipn, int LineNum);
 	void AddIpn(Ipn *ipn, int AddValue, int LineNum);

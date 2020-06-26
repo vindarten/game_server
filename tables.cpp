@@ -5,7 +5,7 @@ const char *TableOfWords[] =
 	"", "", "", "", "", "birth", "death", "die", "int", "real", "string",
 	"if", "else", "while", "put", "get", ",", ";", "=",
 	"{", "}", "[", "]", "(", ")",
-	"or", "and", "<", "<=", ">", ">=", "==", "=!", "+", "-", "*", "/", "!",
+	"or", "and", "<", "<=", ">", ">=", "==", "=!", "+", "-", "-", "*", "/", "!",
 	"prod", "sell", "buy", "build", "abuild", "upgrade",
 	"MinRawPrice", "MaxProdPrice", "MaxRaw", "MaxProd", "MaxNum", "Month",
 	"MyProd", "MyRaw", "MyFact", "MyMoney", "MyAfact", "MyNum",

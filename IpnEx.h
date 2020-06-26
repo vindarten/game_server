@@ -2,14 +2,14 @@
 #define IPNEX_H
 
 #include <stdio.h>
-#include <string.h>
+#include "MyString.h"
 
 enum {InFstDim, InScdDim, InVarDesc, InAssign, InAddFst, InAddScd,
 	InSubFst, InSubScd, InMulFst, InMulScd, InDivFst, InDivScd,
 	InOrFst, InOrScd, InAndFst, InAndScd, InLessFst, InLessScd,
 	InLessEFst, InLessEScd, InGreatFst, InGreatScd,
 	InGreatEFst, InGreatEScd, InEqualFst, InEqualScd,
-	InNotEqualFst, InNotEqualScd, InNeg, InOpGoFalse, InPut,
+	InNotEqualFst, InNotEqualScd, InNeg, InUnSub, InOpGoFalse, InPut,
 	InSemicolon, InVar, InOpGo, InTakeValue
 };
 
@@ -68,7 +68,7 @@ class IpnExNotFound: public IpnEx {
 	char *name;
 public:
 	IpnExNotFound(int l, int w, char *n): IpnEx(l), where(w)
-		{ name = strdup(n); }
+		{ name = MyStrdup(n); }
 	virtual ~IpnExNotFound() { delete [] name; }
 	virtual void PrintError() const;
 };
@@ -78,7 +78,7 @@ class IpnExRedec: public IpnEx {
 	char *name;
 public:
 	IpnExRedec(int l, int w, char *n): IpnEx(l), where(w)
-		{ name = strdup(n); }
+		{ name = MyStrdup(n); }
 	virtual ~IpnExRedec() { delete [] name; }
 	virtual void PrintError() const;
 };
@@ -94,7 +94,7 @@ class IpnExSegFault: public IpnEx {
 	char *name;
 public:
 	IpnExSegFault(int l): IpnEx(l), name(0) {}
-	IpnExSegFault(int l, char *n): IpnEx(l) { name = strdup(n); }
+	IpnExSegFault(int l, char *n): IpnEx(l) { name = MyStrdup(n); }
 	virtual ~IpnExSegFault() { if (name) delete [] name; }
 	virtual void PrintError() const;
 };

@@ -8,7 +8,7 @@ enum {
 	LexAssign,
 	LexLB, LexRB, LexLSB, LexRSB, LexLParen, LexRParen,
 	LexOr, LexAnd, LexLT, LexLE, LexGT, LexGE, LexEq, LexNotEq, LexAdd, LexSub,
-	LexMul, LexDiv, LexNeg,
+	LexUnSub, LexMul, LexDiv, LexNeg,
 	LexProd, LexSell, LexBuy, LexBuild, LexAbuild, LexUpgrade,
 	LexMinRawPrice, LexMaxProdPrice, LexMaxRaw, LexMaxProd, LexMaxNum, LexMonth,
 	LexMyProd, LexMyRaw, LexMyFact, LexMyMoney, LexMyAfact, LexMyNum,
@@ -20,8 +20,6 @@ enum {
 	LexPrintMyInfo, LexPrintMarketInfo, LexPrintPlayerInfo,
 	LexError
 };
-
-extern const char *TableOfWords[];
 
 enum {
 	InvalLex, BirthExpect, DeathExpect, NothingExpect, SemicolonExpect,
@@ -69,6 +67,7 @@ enum {
 	RParenLastDifSoldExp, ValOrIdentLastDifSoldExp
 };
 
+extern const char *TableOfWords[];
 extern const char *TableOfErrors[];
 
 #endif

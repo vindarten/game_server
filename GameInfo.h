@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <string.h>
+#include "MyString.h"
 
 enum {MaxSize = 4096, NameSize = 20, OptSize = 20};
 enum {IPAddress = 1, PortNum, Script, RobotName, Action, NumPlayersOrNumGame};
@@ -22,7 +22,7 @@ class Socket {
 	void CheckEnd(char *HelpBuf) const;
 public:
 	Socket(int argc, char **argv);
-	int CheckStart() const { return strcmp(buf, "  >  "); }
+	int CheckStart() const { return MyStrcmp(buf, "  >  "); }
 	void SendMes(const char *mes) const;
 	void GetStr(char *HelpBuf);
 	void GetOpt(const char *CmpOpt, char *HelpBuf);
@@ -46,7 +46,7 @@ class PlayerInfo {
 public:
 	PlayerInfo();
 	~PlayerInfo() { Delete(bought); Delete(sold); }
-	int CheckName(char *MyName) const { return !strcmp(MyName, name); }
+	int CheckName(char *MyName) const { return !MyStrcmp(MyName, name); }
 	int GetAfact() const { return AutoFact; }
 	int GetFact() const { return fact; }
 	int GetProd() const	{ return prod; }

@@ -47,7 +47,7 @@ void IntStack::AddComp(Ipn *ipn, int oper, int LineNum)
 void IntStack::AddAddSub(Ipn *ipn, int oper, int LineNum)
 {
 	int v = first->value;
-	if (v==LexAdd || v==LexSub || v==LexMul || v==LexDiv || v==LexNeg) {
+	if (v==LexAdd||v==LexSub||v==LexMul||v==LexDiv||v==LexNeg||v==LexUnSub) {
 		AddIpn(ipn, Get(), LineNum);
 		AddAddSub(ipn, oper, LineNum);
 	} else {
@@ -58,11 +58,21 @@ void IntStack::AddAddSub(Ipn *ipn, int oper, int LineNum)
 void IntStack::AddMulDiv(Ipn *ipn, int oper, int LineNum)
 {
 	int v = first->value;
-	if (v==LexMul || v==LexDiv || v==LexNeg) {
+	if (v==LexMul || v==LexDiv || v==LexNeg || v==LexUnSub) {
 		AddIpn(ipn, Get(), LineNum);
 		AddMulDiv(ipn, oper, LineNum);
 	} else {
 		Add(oper);
+	}
+}
+
+void IntStack::AddUnSub(Ipn *ipn, int LineNum)
+{
+	if (first->value == LexNeg || first->value == LexUnSub) {
+		AddIpn(ipn, Get(), LineNum);
+		AddUnSub(ipn, LineNum);
+	} else {
+		Add(LexUnSub);
 	}
 }
 
@@ -111,6 +121,8 @@ void IntStack::AddIpn(Ipn *ipn, int AddValue, int LineNum)
 		ipn->Add(new IpnAdd(LineNum));
 	} else if (AddValue == LexSub) {
 		ipn->Add(new IpnSub(LineNum));
+	} else if (AddValue == LexUnSub) {
+		ipn->Add(new IpnUnSub(LineNum));
 	} else if (AddValue == LexMul) {
 		ipn->Add(new IpnMul(LineNum));
 	} else if (AddValue == LexDiv) {

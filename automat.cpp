@@ -1,18 +1,23 @@
 #include "automat.h"
 
-int Automat::Letter(char c) 
+int Automat::Letter(char c)
 {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+	return (c>='a' && c<='z') || (c>='A' && c<='Z');
 }
 
 int Automat::Digit(char c)
 {
-	return c >= '0' && c <= '9';
+	return c>='0' && c<='9';
 }
 
 int Automat::EndLine(char c)
 {
-	return c == '\r' || c == '\n' || c == EOF;
+	return c=='\n';
+}
+
+int Automat::Space(char c)
+{
+	return c==' ' || c=='\t';
 }
 
 int Automat::Brace(char c)
@@ -22,69 +27,80 @@ int Automat::Brace(char c)
 
 int Automat::Compare(char c)
 {
-	return c == '>' || c == '<' || c == '=';
+	return c=='>' || c=='<' || c=='=';
+}
+
+int Automat::Arithmetic(char c)
+{
+	return c=='+' || c=='-' || c=='*' || c=='/';
 }
 
 int Automat::Single(char c)
 {
-	return c==':'||c==';'||c==','||c=='+'||c=='-'||c=='*'||c=='/'||c=='!';
+	return Brace(c) || Arithmetic(c) || c==';' || c==',' || c=='!';
 }
 
 int Automat::Other(char c)
 {
-	return c =='@'||c=='#'||c=='$'||c=='%'||c=='?'||c=='&';
+	return c=='@' || c=='#' || c=='$' || c=='%' || c=='?' || c=='&';
 }
 
 int Automat::All(char c)
 {
-	return Letter(c)||Digit(c)||Brace(c)||Compare(c)||Single(c)||Other(c); 
+	return Letter(c)||Digit(c)||Compare(c)||Single(c)||Other(c)||Space(c); 
 }
 
 int Automat::Delimiter(char c)
 {
-	int a = c == ' ' || c == '\t' || Digit(c);
-	return EndLine(c)||Brace(c)||Compare(c)||Single(c)||c=='&'||c=='#'||a;
+	return EndLine(c)||Compare(c)||Single(c)||Space(c)||Digit(c)||Letter(c);
 }
 
 Lexeme *Automat::FeedChar(char c)
 {
 	if (state == S) {
-		return StateS(c, 1);
+		return StateSResend(c);
 	} else if (state == Error) {
+		AddBuf(c);
 		return new Lexeme(buf, BufSize, line, LexError);
 	}
 	ChangeState(c);
-	if (state == S) {
-		return StateS(c, 0);
-	} else if (state == SResend) {
-		return StateS(c, 1);
-	} else if (state == Error) {
-		return new Lexeme(buf, BufSize, line, LexError);
+	if (state == SResend) {
+		return StateSResend(c);
 	} else {
 		AddBuf(c);
+		if (state == S) {
+			return StateS(c);
+		} else if (state == Error) {
+			return new Lexeme(buf, BufSize, line, LexError);
+		}
 	}
 	return NULL;
 }
 
-Lexeme *Automat::StateS(char c, int begin)
+Lexeme *Automat::StateSResend(char c)
 {
-	if (!begin)
-		AddBuf(c);
 	state = H;
 	lex = new Lexeme(buf, BufSize, line, GetLexNum());
 	if (c == '\n')
 		line++;
-	if (begin) {
-		ChangeState(c);
-		AddBuf(c);
-	}
+	ChangeState(c);
+	AddBuf(c);
 	if ((*lex).Empty()) {
 		delete lex;
-		if (c == EOF) {
-			lex = new Lexeme(line, 0);
-		} else {
-			lex = NULL;
-		}
+		lex = NULL;
+	}
+	return lex;
+}
+
+Lexeme *Automat::StateS(char c)
+{
+	state = H;
+	lex = new Lexeme(buf, BufSize, line, GetLexNum());
+	if (c == '\n')
+		line++;
+	if ((*lex).Empty()) {
+		delete lex;
+		lex = NULL;
 	}
 	return lex;
 }
@@ -103,12 +119,10 @@ void Automat::ChangeState(char c)
 		StateReal(c);
 	} else if (state == Equal) {
 		StateEqual(c);
-	} else if (state == lg) {
+	} else if (state == LessGreater) {
 		StateLessGreater(c);
 	} else if (state == Comment) {
 		StateComment(c);
-	} else if (state == MultiAssign) {
-		StateMultiAssign(c);
 	}
 }
 
@@ -123,33 +137,11 @@ void Automat::StateH(char c)
 	} else if (c == '=') {
 		state = Equal;
 	} else if (c == '>' || c == '<') {
-		state = lg;
+		state = LessGreater;
 	} else if (c == '\\') {
 		state = Comment;
-	} else if (c == ':') {
-		state = MultiAssign;
-	} else if (EndLine(c) || Brace(c) || Single(c) || c == ' ' || c == '\t') {
+	} else if (EndLine(c) || Single(c) || Space(c)) {
 		state = S;
-	} else {
-		state = Error;
-	}
-}
-
-void Automat::StateString(char c)
-{
-	if (c == '\"') {
-		state = S;
-	} else if (All(c) || c == ' ' || c == '\t') {
-	} else {
-		state = Error;
-	}
-}
-
-void Automat::StateIdent(char c)
-{
-	if (Letter(c) || Digit(c)) {
-	} else if (Delimiter(c)) {
-		state = SResend;
 	} else {
 		state = Error;
 	}
@@ -170,6 +162,26 @@ void Automat::StateInt(char c)
 void Automat::StateReal(char c)
 {
 	if (Digit(c)) {
+	} else if (Delimiter(c)) {
+		state = SResend;
+	} else {
+		state = Error;
+	}
+}
+
+void Automat::StateString(char c)
+{
+	if (c == '\"') {
+		state = S;
+	} else if (All(c)) {
+	} else {
+		state = Error;
+	}
+}
+
+void Automat::StateIdent(char c)
+{
+	if (Letter(c) || Digit(c)) {
 	} else if (Delimiter(c)) {
 		state = SResend;
 	} else {
@@ -206,15 +218,6 @@ void Automat::StateComment(char c)
 	}
 }
 
-void Automat::StateMultiAssign(char c)
-{
-	if (c == '=') {
-		state = S;
-	} else {
-		state = Error;
-	}
-}
-
 void Automat::AddBuf(char c)
 {
 	if (((c != ' ' && c != '\t') || BufSize != 0) && !EndLine(c)) {
@@ -246,7 +249,7 @@ int Automat::GetLexNum()
 		return LexStr;
 	}
 	while(TableOfWords[i] != NULL) {
-		if (!strcmp(buf, TableOfWords[i]))
+		if (!MyStrcmp(buf, TableOfWords[i]))
 			return i;
 		i++;
 	}
@@ -254,4 +257,3 @@ int Automat::GetLexNum()
 		return LexIdent;
 	return LexError;
 }
-

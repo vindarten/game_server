@@ -41,18 +41,31 @@ Ipn *Parser::analyze(FILE *file)
 
 void Parser::next()
 {
-	char c;
+	int c;
 	if (last != NULL)
 		delete last;
 	last = current;
 	current = NULL;
-	do {
-		c = fgetc(f);
-		if ((current = automat.FeedChar(c)) != NULL) {
-			if (!((*current).CheckCorrect())) 
-				throw BadLex(InvalLex);
-		}
-	} while(current == NULL);
+	if (EndSec) {
+		current = new Lexeme(0, LexEmpty);
+	} else {
+		do {
+			if ((c = fgetc(f)) == EOF) {
+				if ((current = automat.FeedChar('\n')) != NULL) {
+					EndSec = 1;
+					if (!((*current).CheckCorrect())) 
+						throw BadLex(InvalLex);
+				} else {
+					current = new Lexeme(0, LexEmpty);
+				}
+			} else {
+				if ((current = automat.FeedChar(c)) != NULL) {
+					if (!((*current).CheckCorrect())) 
+						throw BadLex(InvalLex);
+				}
+			}
+		} while(current == NULL);
+	}
 	LexNum = current->GetLexNum();
 	LineNum = current->GetLineNum();
 }
@@ -180,7 +193,7 @@ void Parser::IntDesc()
 {
 	if (LexNum != LexIdent)
 		throw BadLex(IdentAfterInt);  
-	char *name = strdup(current->GetName());
+	char *name = MyStrdup(current->GetName());
 	int line = current->GetLineNum();
 	next();
 	ArrayDesc(1, RpArrFstInt, ValArrFstInt, RpArrScdInt, ValArrScdInt);
@@ -203,7 +216,7 @@ void Parser::RealDesc()
 {
 	if (LexNum != LexIdent)
 		throw BadLex(IdentAfterReal);
-	char *name = strdup(current->GetName());
+	char *name = MyStrdup(current->GetName());
 	int line = current->GetLineNum();
 	next();
 	ArrayDesc(1, RpArrFstReal, ValArrFstReal, RpArrScdReal, ValArrScdReal);
@@ -226,7 +239,7 @@ void Parser::StringDesc()
 {
 	if (LexNum != LexIdent)
 		throw BadLex(IdentAfterStr);
-	char *name = strdup(current->GetName());
+	char *name = MyStrdup(current->GetName());
 	int line = current->GetLineNum();
 	next();
 	ipn->Add(new IpnInt(1, line), new IpnInt(1, line));
@@ -502,7 +515,7 @@ void Parser::ExpMulDiv(IntStack *stack, int RParenErr, int ValOrIdentErr)
 void Parser::ExpLast(IntStack *stack, int RParenErr, int ValOrIdentErr)
 {
 	if (LexNum == LexIdent) {
-		char *name = strdup(current->GetName());
+		char *name = MyStrdup(current->GetName());
 		int line = current->GetLineNum();
 		next();
 		ArrayDesc(0, RpArrFstExp, ValArrFstExp, RpArrScdExp, ValArrScdExp);
@@ -520,6 +533,10 @@ void Parser::ExpLast(IntStack *stack, int RParenErr, int ValOrIdentErr)
 		next();
 	} else if (LexNum == LexNeg) {
 		stack->AddNeg(ipn, LineNum);
+		next();
+		ExpLast(stack, RParenErr, ValOrIdentErr);
+	} else if (LexNum == LexSub) {
+		stack->AddUnSub(ipn, LineNum);
 		next();
 		ExpLast(stack, RParenErr, ValOrIdentErr);
 	} else if (LexNum == LexLParen) {

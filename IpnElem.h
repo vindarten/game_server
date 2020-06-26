@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include "MyString.h"
 #include "IpnEx.h"
 #include "GameInfo.h"
 
@@ -101,8 +101,8 @@ public:
 class IpnString: public IpnConst {
 	char *str;
 public:
-	IpnString(const char *s, int l = 0): IpnConst(l) { str = strdup(s); }
-	IpnString(const IpnString &other) { str = strdup(other.str); }
+	IpnString(const char *s, int l = 0): IpnConst(l) { str = MyStrdup(s); }
+	IpnString(const IpnString &other) { str = MyStrdup(other.str); }
 	virtual ~IpnString() { delete [] str; }
 	virtual IpnString *Clone() const
 		{ return new IpnString(str, GetLineNum()); }
@@ -113,8 +113,8 @@ public:
 class IpnVarAddr: public IpnConst {
 	char *str;
 public:
-	IpnVarAddr(const char *s, int l = 0): IpnConst(l) { str = strdup(s); }
-	IpnVarAddr(const IpnVarAddr &other) { str = strdup(other.str); }
+	IpnVarAddr(const char *s, int l = 0): IpnConst(l) { str = MyStrdup(s); }
+	IpnVarAddr(const IpnVarAddr &other) { str = MyStrdup(other.str); }
 	virtual ~IpnVarAddr() { delete [] str; }
 	virtual IpnVarAddr *Clone() const
 		{ return new IpnVarAddr(str, GetLineNum()); }
@@ -140,7 +140,7 @@ class IpnTakeValue: public IpnVarOrAssign {
 	{
 		VarElem *cur = *VarList;
 		while(cur != 0) {
-			if (!strcmp(cur->name, name)) {
+			if (!MyStrcmp(cur->name, name)) {
 				if (FstDim >= cur->FstDim || ScdDim >= cur->ScdDim) {
 					throw new IpnExSegFault(GetLineNum(), name);
 				} else {
@@ -171,7 +171,7 @@ class IpnAssign: public IpnVarOrAssign {
 		char *name = VarAddr->Get();
 		GetDims(stack, FstDim, ScdDim, 0);
 		while(cur != 0) {
-			if (!strcmp(cur->name, name)) {
+			if (!MyStrcmp(cur->name, name)) {
 				if (FstDim >= cur->FstDim || ScdDim >= cur->ScdDim) {
 					throw new IpnExSegFault(GetLineNum(), name);
 				} else {
@@ -205,7 +205,7 @@ public:
 	IpnVarDesc(char *n, int t, int l = 0)
 		: IpnVarOrAssign(l), type(t), FstDim(0), ScdDim(0), 
 		considered(0), value(0)
-		{ name = strdup(n);	}
+		{ name = MyStrdup(n);	}
 	~IpnVarDesc();
 	virtual IpnElem *EvaluateFun(IpnItem **stack, VarElem **VarList) const
 		{ return 0; }
@@ -381,7 +381,7 @@ public:
 
 class IpnNotEqual: public IpnLogicalOperation {
 public:
-	IpnNotEqual(int l = 0): IpnLogicalOperation(l) {}
+	IpnNotEqual(int l): IpnLogicalOperation(l) {}
 	virtual ~IpnNotEqual() {}
 	void Print() const { printf("IpnNotEqual\n"); }
 	long long Calc(double x, double y) const { return x != y; }
@@ -394,8 +394,14 @@ public:
 class IpnNeg: public IpnFunction {
 public:
 	void Print() const { printf("IpnNeg\n"); }
-	IpnNeg(int l = 0): IpnFunction(l) {}
-	virtual ~IpnNeg() {}
+	IpnNeg(int l): IpnFunction(l) {}
+	virtual IpnElem *EvaluateFun(IpnItem **stack) const;
+};
+
+class IpnUnSub: public IpnFunction {
+public:
+	void Print() const { printf("IpnUnSub\n"); }
+	IpnUnSub(int l): IpnFunction(l) {}
 	virtual IpnElem *EvaluateFun(IpnItem **stack) const;
 };
 

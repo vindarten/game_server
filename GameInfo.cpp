@@ -13,7 +13,7 @@ void Socket::CheckEnd(char *HelpBuf) const
 	char option[OptSize] = "";
 	if (HelpBuf[0] == '&') {
 		sscanf(HelpBuf, "& %20s", option);
-		if (!strcmp(option, "YOU_WIN"))
+		if (!MyStrcmp(option, "YOU_WIN"))
 			throw "You won!\n";
 	}
 }
@@ -37,7 +37,7 @@ Socket::Socket(int argc, char **argv)
 
 void Socket::SendMes(const char *mes) const
 {
-	write(fd, mes, strlen(mes));
+	write(fd, mes, MyStrlen(mes));
 	printf("%s", mes);
 }
 
@@ -75,7 +75,7 @@ void Socket::GetOpt(const char *CmpOpt, char *HelpBuf)
 		GetStr(HelpBuf);
 		if (HelpBuf[0] == '&')
 			sscanf(HelpBuf, "& %20s", option);
-	} while(strcmp(option, CmpOpt));
+	} while(MyStrcmp(option, CmpOpt));
 }
 
 int PlayerInfo::GetDif(AuctItem *item) const
@@ -84,7 +84,6 @@ int PlayerInfo::GetDif(AuctItem *item) const
 		return 0;
 	int res = 0, i = 0;
 	while(item != 0) {
-		printf("!%d %d\n", item->MaxPrice, item->price);
 		res += item->MaxPrice - item->price;
 		if (item->MaxPrice - item->price != 0)
 			i++;
@@ -189,7 +188,7 @@ void GameInfo::EnterGame(char **argv)
 	int i = 0, n = strtol(argv[NumPlayersOrNumGame], NULL, 10) ;
 	sprintf(HelpBuf, "%s\n", argv[RobotName]);
 	sock.SendMes(HelpBuf);
-	if (strcmp(argv[Action], "create")) {
+	if (MyStrcmp(argv[Action], "create")) {
 		sprintf(HelpBuf, ".join %d\n", n);
 		sock.SendMes(HelpBuf);
 		sock.GetOpt("START", HelpBuf);
@@ -243,16 +242,16 @@ void GameInfo::UpdateInfo()
 		sock.GetStr(HelpBuf);
 		if (HelpBuf[0] == '&') {
 			sscanf(HelpBuf, "& %20s %20s", option, name);
-			if (!strcmp(option, "INFO")) {
+			if (!MyStrcmp(option, "INFO")) {
 				for(i = 0; i < MaxNum; i++) {
-					if (!strcmp(name, pInfo[i].GetName())) {
+					if (!MyStrcmp(name, pInfo[i].GetName())) {
 						pInfo[i].SetInfo(HelpBuf);
 						break;
 					}
 				}
 			}
 		}
-	} while(strcmp(option, "PLAYERS"));
+	} while(MyStrcmp(option, "PLAYERS"));
 	sock.SendMes("market\n");
 	sock.GetOpt("MARKET", HelpBuf);
 	sscanf(HelpBuf,"& MARKET %d%d%d%d",&raw,&RawPrice,&prod,&ProdPrice);
@@ -275,29 +274,29 @@ void GameInfo::WaitAuction()
 		sock.GetStr(HelpBuf);
 		if (HelpBuf[0] == '&') {
 			sscanf(HelpBuf, "& %20s %20s", option, name);
-			if (!strcmp(option, "BOUGHT")) {
+			if (!MyStrcmp(option, "BOUGHT")) {
 				for(i = 0; i < MaxNum; i++) {
-					if (!strcmp(name, pInfo[i].GetName())) {
+					if (!MyStrcmp(name, pInfo[i].GetName())) {
 						pInfo[i].AuctResBought(HelpBuf, month, RawPrice);
 						break;
 					}
 				}	
 			}
-			if (!strcmp(option, "SOLD")) {
+			if (!MyStrcmp(option, "SOLD")) {
 				for(i = 0; i < MaxNum; i++) {
-					if (!strcmp(name, pInfo[i].GetName())) {
+					if (!MyStrcmp(name, pInfo[i].GetName())) {
 						pInfo[i].AuctResSold(HelpBuf, month, ProdPrice);
 						break;
 					}
 				}	
 			}
-			if (!strcmp(option, "BANKRUPT")) {
+			if (!MyStrcmp(option, "BANKRUPT")) {
 				sscanf(HelpBuf, "& BANKRUPT %20s", name);
-				if (!strcmp(name, MyName)) 
+				if (!MyStrcmp(name, MyName)) 
 					throw "You are bankrupt";
 			}
 		}
-	} while(strcmp(option, "ENDTURN"));
+	} while(MyStrcmp(option, "ENDTURN"));
 	month++;
 }
 

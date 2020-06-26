@@ -19,7 +19,7 @@ int IpnVarOrAssign::GetType(VarElem **VarList, char *search) const
 {
 	VarElem *cur = *VarList;
 	while(cur != 0) {
-		if (!strcmp(cur->name, search))
+		if (!MyStrcmp(cur->name, search))
 			return cur->type;
 		cur = cur->next;
 	}
@@ -65,7 +65,7 @@ char *IpnTakeValue::GetString(VarElem **VarList, char *name) const
 {
 	VarElem *cur = *VarList;
 	while(cur != 0) {
-		if (!strcmp(cur->name, name)) {
+		if (!MyStrcmp(cur->name, name)) {
 			delete [] name;
 			return (char *)(cur->value);
 		}
@@ -80,7 +80,7 @@ IpnElem *IpnTakeValue::EvaluateFun(IpnItem **stack, VarElem **VarList) const
 	IpnVarAddr *iVarAddr = dynamic_cast<IpnVarAddr*>(operand);
 	if (!iVarAddr)
 		throw new IpnExNotVarAddr(operand->GetLineNum(), InTakeValue);
-	char *name = strdup(iVarAddr->Get());
+	char *name = MyStrdup(iVarAddr->Get());
 	delete operand;
 	int FstDim, ScdDim;
 	GetDims(stack, FstDim, ScdDim, 0);
@@ -104,9 +104,9 @@ void IpnAssign::SetString(VarElem **VarList, IpnVarAddr *VarAddr,
 	VarElem *cur = *VarList;
 	char *name = VarAddr->Get();
 	while(cur != 0) {
-		if (!strcmp(cur->name, name)) {
+		if (!MyStrcmp(cur->name, name)) {
 			delete [] (char *)(cur->value);
-			cur->value = strdup(iString->Get());
+			cur->value = MyStrdup(iString->Get());
 			delete VarAddr;
 			delete iString;
 			return;
@@ -150,7 +150,7 @@ IpnElem *IpnAssign::EvaluateFun(IpnItem **stack, VarElem **VarList) const
 		}
 	} else if (type == String) {
 		if (iString) {
-			char *s = strdup(iString->Get());
+			char *s = MyStrdup(iString->Get());
 			SetString(VarList, iVarAddr, iString);
 			return new IpnString(s, GetLineNum());
 		} else {
@@ -163,7 +163,7 @@ IpnElem *IpnAssign::EvaluateFun(IpnItem **stack, VarElem **VarList) const
 int IpnVarDesc::SearchName(VarElem *VarList)
 {
 	while(VarList != 0) {
-		if (!strcmp(VarList->name, name))
+		if (!MyStrcmp(VarList->name, name))
 			return 1;
 		VarList = VarList->next;
 	}
@@ -224,7 +224,7 @@ void IpnVarDesc::AddVar(IpnItem **stack, VarElem **VarList, int level)
 				int line = operand3->GetLineNum();
 				throw new IpnExNotStr(line, InVar);
 			}
-			value = strdup(iString->Get());
+			value = MyStrdup(iString->Get());
 		}
 		if (SearchName(*VarList))
 			throw new IpnExRedec(GetLineNum(), InVarDesc, name);
@@ -335,6 +335,29 @@ IpnElem *IpnNeg::EvaluateFun(IpnItem **stack) const
 	}
 	delete operand;
 	return new IpnInt(res, GetLineNum());
+}
+
+IpnElem *IpnUnSub::EvaluateFun(IpnItem **stack) const
+{
+	IpnElem *operand = Pop(stack);
+	long long ResInt, IfReal = 0;
+	double ResReal;
+	IpnInt *iInt = dynamic_cast<IpnInt*>(operand);
+	IpnReal *iReal = dynamic_cast<IpnReal*>(operand);
+	if (iReal) {
+		IfReal = -1;
+		ResReal = -(iReal->Get());
+	} else if (iInt) {
+		ResInt = -(iInt->Get());
+	} else {
+		throw new IpnExNotIntOrReal(operand->GetLineNum(), InUnSub);
+	}
+	delete operand;
+	if (IfReal) {
+		return new IpnReal(ResReal, GetLineNum());
+	} else {
+		return new IpnInt(ResInt, GetLineNum());
+	}
 }
 
 IpnElem *IpnPut::EvaluateFun(IpnItem **stack) const

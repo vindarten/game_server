@@ -15,7 +15,7 @@ public:
 class ParsExcLParen: public ParsExc {
 	char *str;
 public:
-	ParsExcLParen(const char *s) { str = strdup(s); }
+	ParsExcLParen(const char *s) { str = MyStrdup(s); }
 	virtual ~ParsExcLParen() { delete [] str; }
 	virtual void PrintError() const
 		{ printf("\"(\" expected after \"%s\" ", str); }
@@ -24,7 +24,7 @@ public:
 class ParsExcComma: public ParsExc {
 	char *str;
 public:
-	ParsExcComma(const char *s) { str = strdup(s); }
+	ParsExcComma(const char *s) { str = MyStrdup(s); }
 	virtual ~ParsExcComma() { delete [] str; }
 	virtual void PrintError() const
 		{ printf("\",\" expected after the first argument of \"%s\" ", str); }
@@ -33,7 +33,7 @@ public:
 class ParsExcRParen: public ParsExc {
 	char *str;
 public:
-	ParsExcRParen(const char *s) { str = strdup(s); }
+	ParsExcRParen(const char *s) { str = MyStrdup(s); }
 	virtual ~ParsExcRParen() { delete [] str; }
 	virtual void PrintError() const
 		{ printf("\")\" expected after the arguments of \"%s\" ", str); }
@@ -43,7 +43,7 @@ class Parser {
 	Automat automat;
 	Ipn *ipn;
 	Lexeme *current, *last;
-	int LexNum, LineNum;
+	int LexNum, LineNum, EndSec;
 	FILE *f;
 	void next();
 	void S();
@@ -85,7 +85,8 @@ class Parser {
 	int CheckExp();
 public:
 	Parser()
-		: automat(), current(0), last(0), LexNum(0), f(0) { ipn = new Ipn; }
+		: automat(), current(0), last(0), LexNum(0), EndSec(0), f(0)
+		{ ipn = new Ipn; }
 	Ipn *analyze(FILE *file);
 };
 

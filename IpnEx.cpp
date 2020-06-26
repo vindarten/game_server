@@ -80,6 +80,8 @@ void IpnExNotIntOrReal::PrintError() const
 		printf("second operand in \"=!\" is not integer or real ");
 	} else if (where == InNeg) {
 		printf("operand in \"!\" is not integer or real ");
+	} else if (where == InUnSub) {
+		printf("operand in \"-\" is not integer or real ");
 	} else if (where == InOpGoFalse) {
 		printf("operand in conditional jump is not integer or real ");
 	}
