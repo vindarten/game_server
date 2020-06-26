@@ -30,7 +30,7 @@ birth
 		sell(sp, MaxProdPrice - 1008)
 	}
 \Buy raws
-	int remain(MyMoney - pp*2000 - (MyRaw - pp)*300 - (MyProd - sp)*500)
+	int remain(MyMoney - (pp+1)*2000 - (MyRaw - pp)*300 - (MyProd - sp)*500)
 	remain = remain - MyFact*1000 - MyAfact*1500;
 	if (remain > 0) {
 		if (remain / MaxRaw < MinRawPrice) {

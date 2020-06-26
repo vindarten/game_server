@@ -1,0 +1,117 @@
+\Global table with info about players
+	int pInfo[4, MaxNum](0)
+	int DifPProd(0), WinSell(1), DifPRaw(2), WinBuy(3)
+	int LastProdPrice(0), LastRawPrice(0)
+	int PriceIndentSell(500), PriceIndentBuy(108)
+	int AllEnough(1)
+
+birth
+	PrintMarketInfo()
+	PrintMyInfo()
+\Produce products
+	int pp(0)
+	if (MyRaw < MyFact + MyAfact*2) {
+		pp = MyRaw;
+	} else {
+		pp = MyFact + MyAfact*2;
+	}
+	if (pp*2000 >= MyMoney) {
+		pp = MyMoney / 2000;
+	}
+	prod(pp)
+\Sell products
+	int i(0), SumProd(0)
+	while((i = i + 1) <= MaxNum) {				\Get product another players
+		if (PlayerActive(i)) {
+			SumProd = SumProd + PlayerProd(i);
+		}
+	}
+	if (SumProd <= MaxProd) {
+		sell(MyProd, MaxProdPrice)
+		AllEnough = 1;
+	} else {
+		int sp(0)
+		if (MaxProd < MyProd) {
+			sp = MaxProd;
+		} else {
+			sp = MyProd;
+		}
+		i = 0;
+		int SoldDif(0), num(0), MaxDif(0)
+		while((i = i + 1) <= MaxNum) {			\Get difference in sold price 
+			if (PlayerActive(i) and i =! MyNum) {
+				if (PlayerLastSold(i) > 0) {
+					pInfo[WinSell, i-1] = pInfo[WinSell, i-1] + 1;
+					int dif(LastProdPrice - PlayerLastSold(i))
+					if (dif > MaxDif) {
+						MaxDif = dif;
+					}
+					pInfo[DifPProd, i-1] = pInfo[DifPProd, i-1] + dif;
+					SoldDif = SoldDif + pInfo[DifPProd, i-1];
+					num = num + pInfo[WinSell, i-1];
+				}
+			}
+		}
+		if (num) {
+			SoldDif = SoldDif / num;
+		}
+		if (PlayerLastSold(MyNum) == 0) {
+			PriceIndentSell = PriceIndentSell + 391;
+		}
+		if (SoldDif + PriceIndentSell - MaxDif > 1500 and !AllEnough) {
+			PriceIndentSell = PriceIndentSell - 391;
+		}
+		put(SoldDif, PriceIndentSell)
+		sell(sp, MaxProdPrice - (SoldDif + PriceIndentSell))
+		AllEnough = 0;
+	}
+\Buy raws
+	int remain(MyMoney - pp*2000 - (MyRaw - pp)*300 - MyProd*500)
+	remain = remain - MyFact*1000 - MyAfact*1500;
+	if (remain > 0) {
+		i = 0;
+		int BoughtDif(0), num(0), MaxDif(0)
+		while((i = i + 1) <= MaxNum) {			\Get difference in bought price 
+			if (PlayerActive(i) and i =! MyNum) {
+				if (PlayerLastBought(i) > 0) {
+					pInfo[WinBuy, i-1] = pInfo[WinBuy, i-1] + 1;
+					int dif(PlayerLastBought(i) - LastRawPrice)
+					if (dif > MaxDif) {
+						MaxDif = dif;
+					}
+					pInfo[DifPRaw, i-1] = pInfo[DifPRaw, i-1] + dif;
+					BoughtDif = BoughtDif + pInfo[DifPRaw, i-1];
+					num = num + pInfo[WinBuy, i-1];
+				}
+			}
+		}
+		if (num) {
+			BoughtDif = BoughtDif / num;
+		}
+		if (PlayerLastBought(MyNum) == 0) {
+			PriceIndentBuy = PriceIndentBuy + 47;
+		}
+		if (BoughtDif + PriceIndentBuy - MaxDif > 800) {
+			PriceIndentBuy = PriceIndentBuy - 47;
+		}
+		put(BoughtDif, PriceIndentBuy)
+		int BoughtPrice(MinRawPrice + BoughtDif + PriceIndentBuy)
+		int BoughtRaw(MyFact + MyAfact*2 - (MyRaw - pp))
+		if (BoughtRaw > MaxRaw) {
+			BoughtRaw = MaxRaw;
+		}
+		if (BoughtPrice * BoughtRaw > remain) {
+			buy(remain / BoughtPrice, BoughtPrice)
+		} else {
+			buy(BoughtRaw, BoughtPrice)
+		}
+		remain = remain - BoughtRaw * BoughtPrice;
+	}
+\Build factories
+	if (remain > 30000 and MyFact + MyAfact*2 < 4) {
+		build
+	}
+\Remember
+	LastProdPrice = MaxProdPrice;
+	LastRawPrice = MinRawPrice;
+death

@@ -72,7 +72,7 @@ birth
 		remain = remain - BoughtRaw * BoughtPrice;
 	}
 \Build factories
-	if (remain > 30000 and MyFact + MyAfact*2 < 6) {
-		build
-	}
+\	if (remain > 30000 and MyFact + MyAfact*2 < 6) {
+\		build
+\	}
 death
