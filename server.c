@@ -6,19 +6,32 @@
 #include <unistd.h>
 #include <string.h>
 
+struct factory {
+	int num;
+	int month;
+	struct factory *next;
+};
+
 struct usrInfo {
 	int fd;
 	char *buf;
 	int bufSize;
 	struct sockaddr_in *addr;
 	socklen_t addrlen;
-};
+	int number;
+	int status;
+	int fact;
+	int raw;
+	int money;
+	int prod;
+	struct factory *building;
+;
 
 struct gameInfo {
 	struct usrInfo *usrsList;
 	int numUsrs;
 	int listen;
-	int counter;
+	int started;
 };
 
 struct words {
@@ -26,20 +39,36 @@ struct words {
 	struct words *next;
 };
 
+enum {initFactory = 2, initRaw = 2, initProd = 2, initMoney = 10000};
+enum {blocked, active, waiting};
+
 int initSocket(int port);
 void multiplexing(struct gameInfo *gi);
 void initList(struct usrInfo **ui, int numUsrs);
 void clearUsr(struct usrInfo *ui);
 int initSet(struct gameInfo *gi, fd_set *readfds);
-void takeCom(struct gameInfo *gi, struct usrInfo *usrsList, int i);
+void takeCom(struct gameInfo *gi, struct usrInfo *ui);
+void defCom(struct gameInfo *gi, struct usrInfo *ui, struct words *list);
+void putNumUsrs(int fd, int current, int numUsrs);
 int addBuf(struct usrInfo *ui);
-void unplug(struct usrInfo *ui);
-int lineFeed(struct usrInfo ui);
+void deactivate(struct gameInfo *gi, struct usrInfo *ui);
+int lineFeed(struct usrInfo *ui);
 struct words *crash(struct usrInfo *ui, int lenght);
+char *crtWord(struct usrInfo *ui, int j, int i);
+void delList(struct words *list);
 void clearBuf(struct usrInfo *ui, int lenght);
-void takeUsr(struct gameInfo *gi, struct usrInfo *usrsList);
+void takeUsr(struct gameInfo *gi);
+void denied(int fd);
+void readyCheck(struct gameInfo *gi);
+int curNum(struct gameInfo *gi);
 void writeStr(int fd, const char *str);
+void writeInt(int fd, int num);
+int writeStrAll(struct gameInfo *gi, const char *str);
+int writeIntAll(struct gameInfo *gi, int num);
 int cmpStr(const char *a, const char *b);
+void marketInfo(struct gameInfo *gi, struct usrInfo *ui);
+void playerInfo(struct gameInfo *gi, struct usrInfo *ui, struct words *list);
+void delFact(struct building *first);
 
 int main(int argc, char **argv)
 {
@@ -85,50 +114,24 @@ void multiplexing(struct gameInfo *gi)
 	int i, fdMax;
 	fd_set readfds;
 	initList(&((*gi).usrsList), (*gi).numUsrs);
+	(*gi).started = 0;
 	for(;;) {
 		fdMax = initSet(gi, &readfds);
 		if (select(fdMax+1, &readfds, NULL, NULL, NULL) < 1) {
 			continue;
 		}
 		for(i = 0; i < (*gi).numUsrs; i++) {
-			if ((usrsList[i]).fd != -1) {
-				if (FD_ISSET((usrsList[i]).fd, &readfds)) {
+			if (((*gi).usrsList[i]).fd != -1) {
+				if (FD_ISSET(((*gi).usrsList[i]).fd, &readfds)) {
 					takeCom(gi, &((*gi).usrsList[i]));
 				}
 			}
 		}
 		if (FD_ISSET((*gi).listen, &readfds)) {
-			takeUsr(gi, usrsList);
+			takeUsr(gi);
+			readyCheck(gi);
 		}
 	}
-}
-
-void initList(struct usrInfo **ui, int numUsrs)
-{
-	int i;
-	*ui = malloc(numUsrs*sizeof(**ui));
-	for(i = 0; i < numUsrs; i++) {
-		((*ui)[i]).fd = -1;
-		((*ui)[i]).buf = NULL;
-		((*ui)[i]).bufSize = 0;
-		((*ui)[i]).addr = NULL;
-		((*ui)[i]).addrlen = 0;
-	}
-}
-
-void clearUsr(struct usrInfo *ui)
-{
-	(*ui).fd = -1;
-	if ((*ui).buf != NULL) {
-		free((*ui).buf);
-	}
-	(*ui).buf = NULL;
-	(*ui).bufSize = 0;
-	if ((*ui).addr != NULL) {
-		free((*ui).addr);
-	}
-	(*ui).addr = NULL;
-	(*ui).addrlen = 0;
 }
 
 int initSet(struct gameInfo *gi, fd_set *readfds)
@@ -148,43 +151,195 @@ int initSet(struct gameInfo *gi, fd_set *readfds)
 	return fdMax;
 }
 
-void takeCom(struct gameInfo *gi, struct usrInfo *usrsList)
+void initList(struct usrInfo **ui, int numUsrs)
+{
+	int i;
+	*ui = malloc(numUsrs*sizeof(**ui));
+	for(i = 0; i < numUsrs; i++) {
+		((*ui)[i]).fd = -1;
+		((*ui)[i]).buf = NULL;
+		((*ui)[i]).bufSize = 0;
+		((*ui)[i]).addr = NULL;
+		((*ui)[i]).addrlen = 0;
+		((*ui)[i]).number = i+1;
+		((*ui)[i]).status = blocked;
+		((*ui)[i]).fact = initFactory;			
+		((*ui)[i]).raw = initRaw;
+		((*ui)[i]).money = initMoney;
+		((*ui)[i]).prod = initProd;
+		((*ui)[i]).building = NULL;
+	}
+}
+
+void clearUsr(struct usrInfo *ui)
+{
+	(*ui).fd = -1;
+	if ((*ui).buf != NULL) {
+		free((*ui).buf);
+	}
+	(*ui).buf = NULL;
+	(*ui).bufSize = 0;
+	if ((*ui).addr != NULL) {
+		free((*ui).addr);
+	}
+	(*ui).addr = NULL;
+	(*ui).addrlen = 0;
+	(*ui).status = blocked;
+	(*ui).factory = initFactory;
+	(*ui).raw = initRaw;
+	(*ui).money = initMoney;
+	(*ui).prod = initProd;
+	if ((*ui).building != NULL) {
+		delFact((*ui).building);
+	}
+	(*ui).building = NULL;
+}
+
+void delFact(struct building *first)
+{
+	struct building *help;
+	while(first != NULL) {
+		help = first;
+		first = (*first).next;
+		free(help);
+	}
+}
+
+void takeCom(struct gameInfo *gi, struct usrInfo *ui)
 {
 	struct words *list;
-	char buf[1024];
 	int res;
-	res = addBuf(usrsList);
+	res = addBuf(ui);
 	if (res == 0) {
-		unplug(usrsList);
+		deactivate(gi, ui);
 		return;
 	}
-	while((res = lineFeed(usrsList)) != -1) {
-		list = crash(&(usrsList[i]), res);
-		clearBuf(&(usrsList[i]), res);
-		if (list != NULL) {
-			if (cmpStr((*list).word, "up")) {
-				(*gi).counter++;		
+	while((res = lineFeed(ui)) != -1) {
+		list = crash(ui, res);
+		clearBuf(ui, res);
+		if (!(*gi).started) {
+			writeStr((*ui).fd, "The game hasn't started yet");
+			putNumUsrs((*ui).fd, curNum(gi), (*gi).numUsrs);
+		} else {
+			if (list != NULL) {
+				defCom(gi, ui, list);
 			}
-			if (cmpStr((*list).word, "down")) {
-				(*gi).counter--;		
-			}
-			if (cmpStr((*list).word, "show")) {
-				sprintf(buf, "%d\n", (*gi).counter);
-				write((usrsList[i]).fd, buf, strlen(buf)+1);
-			}
-			if (cmpStr((*list).word, "quit")) {
-				unplug(&(usrsList[i]));
+		}
+		delList(list);
+	}
+}
+
+void takeUsr(struct gameInfo *gi)
+{
+	char buf[1024];
+	struct sockaddr_in *addr;
+	socklen_t addrlen;
+	int fd, i;
+	addrlen = sizeof(*addr);
+	addr = malloc(addrlen);
+	if ((fd = accept((*gi).listen, (struct sockaddr*)addr, &addrlen)) == -1) {
+		free(addr);	
+	} else if ((*gi).started) {
+		denied(fd);
+		free(addr);
+	} else {
+		for(i = 0; i < (*gi).numUsrs; i++) {
+			if (((*gi).usrsList[i]).fd == -1) {
+				sprintf(buf, "\nPlayer %d added", ((*gi).usrsList[i]).number);
+				writeStrAll(gi, buf);
+				((*gi).usrsList[i]).fd = fd;
+				((*gi).usrsList[i]).addr = addr;
+				((*gi).usrsList[i]).addrlen = addrlen;
+				putNumUsrs(((*gi).usrsList[i]).fd, curNum(gi), (*gi).numUsrs);
+				break;
 			}
 		}
 	}
-	writeStr((usrsList[i]).fd, "  >  ");
 }
 
-void unplug(struct usrInfo *ui)
+void readyCheck(struct gameInfo *gi)
 {
+	int i;
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		if (((*gi).usrsList[i]).fd == -1) {
+			return;
+		}
+	}
+	(*gi).started = 1;
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		((*gi).usrsList[i]).status = active;
+		writeStr(((*gi).usrsList[i]).fd, "\nThe game has begun\n  >  ");
+	}
+}
+
+void deactivate(struct gameInfo *gi, struct usrInfo *ui)
+{
+	char buf[1024];
+	int i, n = 0;
 	shutdown((*ui).fd, 2);
 	close((*ui).fd);
 	clearUsr(ui);
+	sprintf(buf, "\nPlayer %d left the game", (*ui).number);
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		if (((*gi).usrsList[i]).fd != -1) {
+			writeStr(((*gi).usrsList[i]).fd, buf);
+			if ((*gi).started) {
+				writeStr(((*gi).usrsList[i]).fd, "\n  >  ");
+			}
+			n++;
+		} 
+	}
+	if (n == 0) {
+		(*gi).started = 0;
+		(*gi).counter = 0;
+	}
+}
+
+void delList(struct words *list)
+{
+	struct words *help;
+	while(list != NULL) {
+		free((*list).word);
+		help = list;
+		list = (*list).next;
+		free(help);
+	}
+}
+
+void defCom(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
+{
+	if (cmpStr((*list).word, "market")) {
+		marketInfo(gi, ui);
+	} else if (cmpStr((*list).word, "player")) {
+		playerInfo(gi, ui, (*list).next);			
+	} else if (cmpStr((*list).word, "build")) {
+		build(gi, ui, (*list).next);
+	} else if (cmpStr((*list).word, "quit")) {
+		deactivate(gi, ui);
+	} else {
+		writeStr((*ui).fd, "Unknown command\n");
+	}
+}
+
+void build(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
+{
+}
+
+void marketInfo(struct gameInfo *gi, struct usrInfo *ui)
+{
+}
+
+void playerInfo(struct gameInfo *gi, struct usrInfo *ui, struct words *list)
+{
+}
+
+void putNumUsrs(int fd, int current, int numUsrs)
+{
+	char buf[1024];
+	sprintf(buf, "\nThe number of connected players: %d", current);
+	writeStr(fd, buf);
+	sprintf(buf, "\nThe number of expected players: %d", numUsrs - current);
+	writeStr(fd, buf);
 }
 
 int addBuf(struct usrInfo *ui)
@@ -225,24 +380,35 @@ struct words *crash(struct usrInfo *ui, int lenght)
 {
 	struct words *list = NULL;
 	struct words *help;
-	int m, i, j = 0;
+	struct words **last;
+	int i, j = 0;
+	last = &list;
 	for(i = 0; i < lenght; i++) {
 		if ((*ui).buf[i] == ' ' || (*ui).buf[i] == '\r') {
 			if (j != i) {
 				help = malloc(sizeof(*help));
-				(*help).word = malloc(sizeof(*(*help).word)*(i-j+1));
-				for(m = 0; m < i-j; m++) {
-					(*help).word[m] = (*ui).buf[m+j];
-				}
-				(*help).word[i-j] = 0;
-				(*help).next = list;
-				list = help;
+				(*help).word = crtWord(ui, j, i);
+				(*help).next = NULL;
+				*last = help;
+				last = &(**last).next;
 				j = i;
 			}
 			j++;
 		}
 	}
 	return list;
+}
+
+char *crtWord(struct usrInfo *ui, int j, int i)
+{
+	int m;
+	char *help;
+	help = malloc((i-j+1)*sizeof(*help));
+	for(m = 0; m < i-j; m++) {
+		help[m] = (*ui).buf[m+j];
+	}
+	help[i-j] = 0;
+	return help;
 }
 
 void clearBuf(struct usrInfo *ui, int lenght)
@@ -261,37 +427,58 @@ void clearBuf(struct usrInfo *ui, int lenght)
 	(*ui).bufSize = n;
 }
 
-void takeUsr(struct gameInfo *gi, struct usrInfo *usrsList)
+void denied(int fd)
 {
-	struct sockaddr_in *addr;
-	socklen_t addrlen;
-	int fd, i;
-	addrlen = sizeof(*addr);
-	addr = malloc(addrlen);
-	if ((fd = accept((*gi).listen, (struct sockaddr*)addr, &addrlen)) == -1) {
-		free(addr);	
-		return;
-	}
+	writeStr(fd, "The game has already started\n");
+	shutdown(fd, 2);
+	close(fd);
+}
+
+int curNum(struct gameInfo *gi)
+{
+	int i, n = 0;
 	for(i = 0; i < (*gi).numUsrs; i++) {
-		if ((usrsList[i]).fd == -1) {
-			(usrsList[i]).fd = fd;
-			(usrsList[i]).addr = addr;
-			(usrsList[i]).addrlen = addrlen;
-			writeStr((usrsList[i]).fd, "  >  ");
-			break;
-		}
-		if (i == (*gi).numUsrs-1) {
-			writeStr(fd, "The game has already started\n");
-			shutdown(fd, 2);
-			close(fd);
-			free(addr);
+		if (((*gi).usrsList[i]).fd != -1) {
+			n++;
 		}
 	}
+	return n;
 }
 
 void writeStr(int fd, const char *str)
 {
 	write(fd, str, strlen(str)+1);
+}
+
+void writeInt(int fd, int num)
+{
+	char buf[1024];
+	sprintf(buf, "%d", num);
+	write(fd, buf, strlen(buf)+1);
+}
+
+int writeStrAll(struct gameInfo *gi, const char *str)
+{
+	int i, n = 0;
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		if (((*gi).usrsList[i]).fd != -1) {
+			write(((*gi).usrsList[i]).fd, str, strlen(str)+1); 	
+		}
+	}
+	return n;
+}
+
+int writeIntAll(struct gameInfo *gi, int num)
+{
+	char buf[1024];
+	int i, n = 0;
+	for(i = 0; i < (*gi).numUsrs; i++) {
+		if (((*gi).usrsList[i]).fd != -1) {
+			sprintf(buf, "%d", num);
+			write(((*gi).usrsList[i]).fd, buf, strlen(buf)+1);
+		}
+	}
+	return n;
 }
 
 int cmpStr(const char *a, const char *b)
