@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 	struct gameInfo gi;	
 	int port;
 	if (argc < 3) {
-		printf("error\n");
+		printf("Usage: server <number_of_players> <port>\n");
 		return 0;
 	}	
 	gi.numUsrs = strtol(argv[1], NULL, 10);
